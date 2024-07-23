@@ -21,6 +21,8 @@ language = "uk"
 normalizer = BasicTextNormalizer()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# torch_dtype = torch.float16
+torch_dtype = torch.float32
 
 
 def sigmoid(x):
@@ -48,7 +50,12 @@ def train(
     tokenizer = WhisperTokenizer.from_pretrained(
         MODEL, language=language, task="transcribe"
     )
-    model = WhisperForConditionalGeneration.from_pretrained(MODEL).to(device)
+    model = WhisperForConditionalGeneration.from_pretrained(
+        MODEL,
+        torch_dtype=torch_dtype,
+        low_cpu_mem_usage=True,
+        attn_implementation="eager",
+    ).to(device)
     forced_decoder_ids = processor.get_decoder_prompt_ids(
         language=language, task="transcribe"
     )
@@ -81,6 +88,10 @@ def train(
             item["mel"] = feature_extractor(
                 audio.squeeze(0).numpy(), sampling_rate=16_000, return_tensors="pt"
             )["input_features"]
+
+            if torch_dtype == torch.float16:
+                item["mel"] = item["mel"].to(torch.float16)
+
             item["decoder_input_ids"] = tokenizer(
                 text, max_length=1024, truncation=True
             ).input_ids
@@ -168,8 +179,12 @@ def train(
                         new_state_dict[k] = new_state_dict[k] + noise * std * 0.1
 
                     model.load_state_dict(new_state_dict)
+
+                    if torch_dtype == torch.float16:
+                        item["mel"] = item["mel"].to(torch.float16)
+
                     generated_ids = model.generate(
-                        inputs=item["mel"].to(device),
+                        input_features=item["mel"].to(device),
                         forced_decoder_ids=forced_decoder_ids,
                         max_new_tokens=150,
                     )
@@ -202,7 +217,7 @@ def train(
             for item in dataset:
                 mel = item["mel"]
                 generated_ids = model.generate(
-                    inputs=mel.to(device),
+                    input_features=mel.to(device),
                     forced_decoder_ids=forced_decoder_ids,
                     max_new_tokens=150,
                 )

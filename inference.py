@@ -15,13 +15,15 @@ language = "uk"
 normalizer = BasicTextNormalizer()
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+# torch_dtype = torch.float16
+torch_dtype = torch.float32
 
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-def train(
+def inference(
     MODEL="openai/whisper-large-v3",
     DATASET="chime4",
     TEST_DATA="",
@@ -67,8 +69,12 @@ def train(
             all_pred, all_gt = [], []
             for item in dataset:
                 mel = item["mel"]
+
+                if torch_dtype == torch.float16:
+                    mel = mel.to(torch.float16)
+
                 generated_ids = model.generate(
-                    inputs=mel.to(device),
+                    input_features=mel.to(device),
                     forced_decoder_ids=forced_decoder_ids,
                     max_new_tokens=150,
                 )
@@ -94,15 +100,23 @@ def train(
     print(f"{DATASET}:")
 
     ## evaluate official whisper (only need to run once)
-    model = WhisperForConditionalGeneration.from_pretrained(MODEL).to(device)
+    model = WhisperForConditionalGeneration.from_pretrained(
+        MODEL,
+        torch_dtype=torch_dtype,
+        low_cpu_mem_usage=True,
+        attn_implementation="eager",
+    ).to(device)
+
     model.eval()
+
     print(f"zero-shot = {evaluate(model, test_dataset)}")
 
     ## evaluate star adapted whisper
     model = torch.load(CKPT).to(device)
     model.eval()
+
     print(f"star = {evaluate(model, test_dataset)}")
 
 
 if __name__ == "__main__":
-    fire.Fire(train)
+    fire.Fire(inference)

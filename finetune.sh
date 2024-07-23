@@ -15,4 +15,4 @@ python finetune.py \
     --BATCH_SIZE 1 \
     --GRADIENT_ACCUMULATION_STEPS 16 \
     --LEARNING_RATE 1e-5 \
-    --EPOCHS 2
+    --EPOCHS 30
