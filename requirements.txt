@@ -1,0 +1,12 @@
+whisper-normalizer
+
+torch
+torchaudio
+
+jiwer
+
+transformers
+
+numpy<2
+
+fire
